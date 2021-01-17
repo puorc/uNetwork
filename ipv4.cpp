@@ -49,5 +49,20 @@ void ipv4_send(uint32_t src_ip, uint32_t dst_ip, uint8_t protocol, uint8_t *data
     memcpy(ptr, &ipv4, sizeof(struct ipv4_t));
     ptr += sizeof(struct ipv4_t);
     memcpy(ptr, data, len);
-    send_ethernet_str("00:0c:29:6d:50:25", "aa:2e:9d:e9:38:ec", ETH_IPV4, packet, sizeof(struct ipv4_t) + len);
+    send_ethernet_str("00:0c:29:6d:50:25", "06:fb:91:e6:e0:4e", ETH_IPV4, packet, sizeof(struct ipv4_t) + len);
+}
+
+void ipv4_receive(uint8_t *data, int len, uint8_t **ptr, int *out_len) {
+    struct ipv4_t *ipv4 = (struct ipv4_t *)data;
+    if (ipv4->protocol != IP_TCP) {
+        std::cout << "Not a TCP packet!";
+        std::cout.flush();
+        return;
+    }
+    std::cout << "TCP packet";
+    std::cout.flush();
+
+    int header_length = (ipv4->ver_hl & 0x0f) * 4;
+    *ptr = data + header_length;
+    *out_len = ipv4->datagram_len - header_length;
 }

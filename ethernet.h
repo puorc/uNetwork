@@ -17,5 +17,6 @@ struct ethernet_t {
 
 void send_ethernet(uint8_t *smac, uint8_t *dmac, uint16_t type, uint8_t *data, int len);
 void send_ethernet_str(char *smac, char *dmac, uint16_t type, uint8_t *data, int len);
+int receive_ethernet(uint8_t *data, int in_len, uint8_t **ptr, int *len);
 
 #endif //TCPIP_ETHERNET_H

@@ -1,5 +1,12 @@
 #include "ethernet.h"
 
+int receive_ethernet(uint8_t *data, int in_len, uint8_t **ptr, int *len) {
+    struct ethernet_t *eth = (struct ethernet_t *) data;
+    *ptr = data + sizeof(struct ethernet_t);
+    *len = in_len - sizeof(struct ethernet_t);
+    return be16toh(eth->ethertype);
+}
+
 void send_ethernet(uint8_t *smac, uint8_t *dmac, uint16_t type, uint8_t *data, int len) {
     uint8_t *packet = static_cast<uint8_t *>(malloc(sizeof(struct ethernet_t) + len));
     uint8_t *ptr = packet;

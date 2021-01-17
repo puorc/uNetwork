@@ -10,6 +10,7 @@
 #include <cstring>
 #include "ethernet.h"
 #include "constants.h"
+#include <iostream>
 
 struct ipv4_t {
     uint8_t ver_hl;
@@ -25,5 +26,7 @@ struct ipv4_t {
 } __attribute__((packed));
 
 void ipv4_send(uint32_t src_ip, uint32_t dst_ip, uint8_t protocol, uint8_t *data, int len);
+
+void ipv4_receive(uint8_t *data, int len, uint8_t **ptr, int *out_len);
 
 #endif //TCPIP_IPV4_H

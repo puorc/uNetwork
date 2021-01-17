@@ -5,8 +5,8 @@
 #include "constants.h"
 #include "network.h"
 #include "ipv4.h"
-#include "tcp.h"
 #include "arp.h"
+#include "TCPConnection.h"
 
 const int MAX_PACKET_SIZE = 8192;
 
@@ -66,25 +66,39 @@ static void send_test() {
 void read_loop() {
     tun_init();
     uint8_t buf[MAX_PACKET_SIZE];
-    send_test();
-    while (tun_read(buf, MAX_PACKET_SIZE) > 0) {
-        struct ethernet_t *eth = reinterpret_cast<ethernet_t *>(buf);
-        switch (be16toh(eth->ethertype)) {
-            case ETH_IPV4:
+    TCPConnection s(0x2ed93ad8, 80);
+    s.init();
+    bool doit = false;
+    int n;
+    while ((n = tun_read(buf, MAX_PACKET_SIZE)) > 0) {
+        uint8_t *ptr;
+        int len;
+        switch (receive_ethernet(buf, n, &ptr, &len)) {
+            case ETH_IPV4: {
                 std::cout << "ipv4 packet" << std::endl;
                 std::cout.flush();
+                uint8_t *wptr;
+                int wlen;
+                ipv4_receive(ptr, len, &wptr, &wlen);
+                s.receive(wptr, wlen);
+                const char *tosend = "GET / HTTP/1.1\r\nHost: google.com:80\r\nConnection: close\r\n\r\n";
+                if (!doit) {
+                    s.send((uint8_t *) tosend, 58);
+                    doit = true;
+                }
                 break;
+            }
             case ETH_ARP:
                 std::cout << "arp packet" << std::endl;
                 std::cout.flush();
-                process_arp(buf + sizeof(ethernet_t));
+                process_arp(ptr);
                 break;
             case ETH_IPV6:
                 std::cout << "ipv6 packet" << std::endl;
                 std::cout.flush();
                 break;
             default:
-                std::cout << "protocol not supported: " << eth->ethertype << std::endl;
+                std::cout << "protocol not supported" << std::endl;
                 std::cout.flush();
         }
     }
