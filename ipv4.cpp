@@ -24,45 +24,55 @@ static uint16_t calculate_checksum(struct ipv4_t *ip) {
     return res;
 }
 
-void ipv4_send(uint32_t src_ip, uint32_t dst_ip, uint8_t protocol, uint8_t *data, int len) {
-    struct ipv4_t ipv4;
-    ipv4.ver_hl = IPV4_VERSION | IPV4_HEADER_LENGTH;
+ssize_t ipv4_send(uint32_t src_ip, uint32_t dst_ip, uint8_t protocol, uint8_t *data, size_t len) {
+    size_t buf_size = sizeof(struct ipv4_t) + len;
+    auto *buf = new uint8_t[buf_size];
+    uint8_t *ptr = buf;
+
+    struct ipv4_t *ipv4 = reinterpret_cast<ipv4_t *>(ptr);
+    ipv4->ver_hl = IPV4_VERSION | IPV4_HEADER_LENGTH;
+
     // no type of service
-    ipv4.tos = 0;
-    ipv4.datagram_len = htobe16(20 + len);
+    ipv4->tos = 0;
+
+    ipv4->datagram_len = htons(20 + len);
+
     // don't do fragmentation
-    ipv4.id = 0;
-    ipv4.flags_frag = 0x0040;
-    // fix timeline
-    ipv4.ttl = 0x40;
+    ipv4->id = 0;
+    ipv4->flags_frag = 0x0040;
 
-    ipv4.protocol = protocol;
+    // fix ttl
+    ipv4->ttl = 0x40;
+
+    ipv4->protocol = protocol;
     // calculate later
-    ipv4.checksum = 0;
-    ipv4.src_ip = src_ip;
-    ipv4.dst_ip = dst_ip;
+    ipv4->checksum = 0;
+    ipv4->src_ip = src_ip;
+    ipv4->dst_ip = dst_ip;
+    ipv4->checksum = calculate_checksum(ipv4);
 
-    ipv4.checksum = calculate_checksum(&ipv4);
-
-    uint8_t *packet = static_cast<uint8_t *>(malloc(sizeof(struct ipv4_t) + len));
-    uint8_t *ptr = packet;
-    memcpy(ptr, &ipv4, sizeof(struct ipv4_t));
     ptr += sizeof(struct ipv4_t);
     memcpy(ptr, data, len);
-    send_ethernet_str("00:0c:29:6d:50:25", "06:fb:91:e6:e0:4e", ETH_IPV4, packet, sizeof(struct ipv4_t) + len);
+    ssize_t n = ethernet_send_with_mac("00:0c:29:6d:50:25", "06:fb:91:e6:e0:4e", ethernet_protocol::IPv4, buf,
+                                       sizeof(struct ipv4_t) + len);
+    delete[] buf;
+    return n;
 }
 
-void ipv4_receive(uint8_t *data, int len, uint8_t **ptr, int *out_len) {
-    struct ipv4_t *ipv4 = (struct ipv4_t *)data;
+Result ipv4_recv(uint8_t *data, size_t len) {
+    if (len < sizeof(struct ipv4_t)) {
+        std::cout << "Invalid IPv4 packet. size too small" << std::endl;
+        std::cout.flush();
+        return Result{.data = nullptr, .protocol = 0, .size = 0};
+    }
+
+    auto *ipv4 = reinterpret_cast<ipv4_t *>(data);
     if (ipv4->protocol != IP_TCP) {
         std::cout << "Not a TCP packet!";
         std::cout.flush();
-        return;
+        return Result{.data = nullptr, .protocol = ipv4->protocol, .size = 0};
     }
-    std::cout << "TCP packet";
-    std::cout.flush();
 
-    int header_length = (ipv4->ver_hl & 0x0f) * 4;
-    *ptr = data + header_length;
-    *out_len = ipv4->datagram_len - header_length;
+    size_t header_length = (ipv4->ver_hl & 0x0f) * 4;
+    return Result{.data=data + header_length, .protocol=IP_TCP, .size=ipv4->datagram_len - header_length};
 }

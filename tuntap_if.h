@@ -14,8 +14,8 @@
 
 void tun_init();
 
-int tun_read(uint8_t* buf, int len);
+ssize_t tun_read(uint8_t *buf, size_t len);
 
-int tun_write(uint8_t* buf, int len);
+ssize_t tun_write(uint8_t *buf, size_t len);
 
 #endif //TCPIP_TUNTAP_IF_H

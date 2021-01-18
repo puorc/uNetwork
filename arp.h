@@ -5,7 +5,6 @@
 #include <cstring>
 #include "netdev.h"
 #include "ethernet.h"
-#include "constants.h"
 #include "tuntap_if.h"
 
 struct arp_t {
@@ -20,6 +19,6 @@ struct arp_t {
     uint32_t target_protocol_addr;
 }  __attribute__((packed));
 
-void process_arp(uint8_t *data);
+void arp_recv(uint8_t *data);
 
 #endif //TCPIP_ARP_H
