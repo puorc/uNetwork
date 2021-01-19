@@ -2,70 +2,98 @@
 #include "TCPConnection.h"
 #include "ipv4.h"
 
-const uint32_t network_order_plus_one = 0x1000000;
-
-constexpr uint16_t get_flags(int header_len, uint16_t mask) {
-    return (uint16_t) (16 * header_len / 4) | mask;
-}
-
 void TCPConnection::send(uint8_t *data, size_t len, uint16_t flags) {
     size_t total_len = len + sizeof(struct tcp_t);
-    uint8_t *buf = new uint8_t[total_len];
-    uint8_t *ptr = buf;
+    auto *buf = new uint8_t[total_len];
 
-    struct tcp_t tcp;
-    tcp.src_port = src_port;
-    tcp.dst_port = dst_port;
-    tcp.seq = seq_number;
-    tcp.ack = ack_number;
-    tcp.flags = flags;
-    tcp.window = 0xbdad;
-    tcp.checksum = 0;
-    tcp.urgent_pt = 0;
+    auto *tcp = reinterpret_cast<tcp_t *>(buf);
+    tcp->src_port = src_port;
+    tcp->dst_port = dst_port;
+    tcp->seq = seq_number;
+    tcp->ack = ack_number;
+    tcp->flags = flags;
+    tcp->window = 0xbdad;
+    tcp->checksum = 0;
+    tcp->urgent_pt = 0;
 
-    memcpy(ptr, &tcp, sizeof(tcp_t));
-    ptr += sizeof(tcp_t);
-    memcpy(ptr, data, len);
+    memcpy(buf + sizeof(struct tcp_t), data, len);
+    tcp->checksum = tcp_udp_checksum(src_ip, dst_ip, IP_TCP, buf, total_len);
 
-    struct tcp_t *ss = reinterpret_cast<tcp_t *>(buf);
-    ss->checksum = tcp_udp_checksum(src_ip, dst_ip, IP_TCP, buf, total_len);
-
-    ipv4_send(src_ip, dst_ip, IP_TCP, buf, total_len);
+    ssize_t n;
+    if ((n = ipv4_send(src_ip, dst_ip, IP_TCP, buf, total_len)) < 0) {
+        std::cout << "send failure. retransmit scheduled";
+        std::cout.flush();
+        delete[] buf;
+        return;
+    }
     delete[] buf;
+    inc_seq_number(flags, len);
 }
 
 void TCPConnection::init() {
-    send(nullptr, 0, get_flags(20, SYN_MASK));
+    send(nullptr, 0, get_flags({SYN_MASK}));
     state = State::SYN_SEND;
 }
 
 void TCPConnection::send(uint8_t *data, size_t len) {
-    send(data, len, 0x1850);
+    send(data, len, get_flags({PSH_MASK, ACK_MASK}));
 }
 
 void TCPConnection::receive(uint8_t *data, size_t len) {
-    struct tcp_t *tcp = (struct tcp_t *) data;
+    struct tcp_t *tcp = reinterpret_cast<tcp_t *>(data);
     uint16_t flags = tcp->flags;
-    uint16_t header_len = ((flags & 0xf000) >> 12);
-
-    bool is_ack = ((flags & ACK_MASK) != 0);
-    bool is_syn = ((flags & SYN_MASK) != 0);
-    bool is_fin = ((flags & FIN_MASK) != 0);
-
-    if (is_ack && is_syn) {
-        ack_number = tcp->seq + network_order_plus_one;
-        seq_number += network_order_plus_one;
-        send(nullptr, 0, get_flags(20, ACK_MASK));
-        state = State::ESTABLISHED;
-    } else if (is_ack) {
-        std::cout << "get ack" << std::endl;
-        std::cout.flush();
-    } else if (is_fin) {
-        std::cout << "get fin" << std::endl;
-        std::cout.flush();
-    } else {
-        std::cout << "data" << std::endl;
+    uint16_t header_len = ((flags & 0x00f0) >> 4) * 4;
+    if (header_len > len) {
+        std::cerr << "malformed TCP segment. Size too small";
+        std::cerr.flush();
+        return;
     }
+    size_t payload_size = len - header_len;
+
+    if (is_ack(flags)) {
+        send_base = std::max(ntohl(tcp->ack), send_base);
+    }
+    if (is_syn(flags)) {
+        ack_number = tcp->seq;
+        inc_ack_number(flags, payload_size);
+        send(nullptr, 0, get_flags({ACK_MASK}));
+        state = State::ESTABLISHED;
+        return;
+    } else if (is_fin(flags)) {
+        inc_ack_number(flags, payload_size);
+        state = State::FIN_WAIT_1;
+        send(nullptr, 0, get_flags({ACK_MASK, FIN_MASK}));
+    } else if (payload_size > 0) {
+        uint8_t *payload = data + header_len;
+        std::cout << "payload is" << std::endl << payload << std::endl;
+        inc_ack_number(flags, payload_size);
+        send(nullptr, 0, get_flags({ACK_MASK}));
+    }
+}
+
+void TCPConnection::inc_seq_number(uint16_t flags, size_t payload_size) {
+    if (is_syn(flags) || is_fin(flags)) {
+        seq_number = nl_add_hl(seq_number, 1);
+    } else if (payload_size != 0) {
+        seq_number = nl_add_hl(seq_number, (uint32_t) payload_size);
+    }
+}
+
+void TCPConnection::inc_ack_number(uint16_t flags, size_t payload_size) {
+    if (is_syn(flags) || is_fin(flags)) {
+        ack_number = nl_add_hl(ack_number, 1);
+    } else if (payload_size != 0) {
+        ack_number = nl_add_hl(ack_number, (uint32_t) payload_size);
+    }
+}
+
+uint16_t TCPConnection::get_flags(std::initializer_list<uint16_t> masks, uint16_t header_len) {
+    // max header length is 7 * 4 = 28
+    uint16_t base = std::min((uint16_t) 28, header_len) / 4 * 16; // significant bit on uint8
+    for (auto mask : masks) {
+        base |= mask;
+    }
+    return base;
 }
 
 

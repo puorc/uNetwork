@@ -74,5 +74,5 @@ Result ipv4_recv(uint8_t *data, size_t len) {
     }
 
     size_t header_length = (ipv4->ver_hl & 0x0f) * 4;
-    return Result{.data=data + header_length, .protocol=IP_TCP, .size=ipv4->datagram_len - header_length};
+    return Result{.data=data + header_length, .protocol=IP_TCP, .size=ntohs(ipv4->datagram_len) - header_length};
 }

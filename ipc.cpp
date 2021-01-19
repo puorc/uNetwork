@@ -24,7 +24,7 @@ int create_socket(int sockfd, struct ipc_msg *msg) {
 //    send(sockfd, buf, len, MSG_NOSIGNAL)
 //    send(sockfd, buf, len, MSG_NOSIGNAL)
 //sendto(fd, buf, len,
-//                                        flags, dest_addr, dest_len)
+//                                        get_flags, dest_addr, dest_len)
     int res = sendto(sockfd, response, resplen,
                      MSG_NOSIGNAL, NULL, 0);
 //    int res = write(sock_fd, response, resplen);
