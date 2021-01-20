@@ -1,6 +1,4 @@
-#include <cstring>
 #include "TCPConnection.h"
-#include "ipv4.h"
 
 void TCPConnection::send(uint8_t *data, size_t len, uint16_t flags) {
     size_t total_len = len + sizeof(struct tcp_t);

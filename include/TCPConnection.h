@@ -1,10 +1,12 @@
 #ifndef TCPIP_TCPCONNECTION_H
 #define TCPIP_TCPCONNECTION_H
 
-#include "utils.h"
 #include <queue>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include "ipv4.h"
+#include "utils.h"
 
 struct tcp_t {
     uint16_t src_port;
