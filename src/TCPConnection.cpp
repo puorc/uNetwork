@@ -44,8 +44,8 @@ void TCPConnection::send(uint8_t *data, size_t len) {
     send(data, len, get_flags({PSH_MASK, ACK_MASK}));
 }
 
-void TCPConnection::receive(uint8_t *data, size_t len) {
-    struct tcp_t *tcp = reinterpret_cast<tcp_t *>(data);
+void TCPConnection::receive(uint8_t const *data, size_t len) {
+    auto *tcp = reinterpret_cast<tcp_t const *>(data);
     uint16_t flags = tcp->flags;
     uint16_t header_len = ((flags & 0x00f0) >> 4) * 4;
     if (header_len > len) {
@@ -69,7 +69,7 @@ void TCPConnection::receive(uint8_t *data, size_t len) {
         state = State::FIN_WAIT_1;
         send(nullptr, 0, get_flags({ACK_MASK, FIN_MASK}));
     } else if (payload_size > 0) {
-        uint8_t *payload = data + header_len;
+        uint8_t const *payload = data + header_len;
         std::cout << "payload is" << std::endl << payload << std::endl;
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));

@@ -27,7 +27,7 @@ private:
 public:
     explicit RouteTable(const NetworkDevice &device);
 
-    uint32_t lookup(uint32_t target);
+    uint32_t lookup(uint32_t target) const;
 
     static const uint32_t end = 0;
 };

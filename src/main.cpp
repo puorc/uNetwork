@@ -17,11 +17,11 @@ int main() {
     bool doit = false;
     while (true) {
         tcp.recv();
-        const char *tosend = "GET / HTTP/1.1\r\nHost: google.com:80\r\nConnection: close\r\n\r\n";
-        if (!doit) {
-            tcp.send(0, (uint8_t *) tosend, 58);
-            doit = true;
-        }
+//        const char *tosend = "GET / HTTP/1.1\r\nHost: google.com:80\r\nConnection: close\r\n\r\n";
+//        if (!doit) {
+//            tcp.send(0, (uint8_t *) tosend, 58);
+//            doit = true;
+//        }
     }
 
 

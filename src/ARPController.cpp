@@ -1,10 +1,10 @@
 #include "ARPController.h"
 
-void ARPController::recv(uint8_t *data, size_t size) {
+void ARPController::recv(uint8_t const *data, size_t size) {
     if (size < sizeof(struct arp_t)) {
         return;
     }
-    auto *arp = reinterpret_cast<arp_t *>(data);
+    auto *arp = reinterpret_cast<arp_t const *>(data);
     if (static_cast<Opcode>(arp->opcode) == Opcode::Reply) {
         Ethernet::HwAddr addr;
         std::copy(arp->sender_hw_addr, arp->sender_hw_addr + 6, std::begin(addr));
@@ -16,8 +16,8 @@ void ARPController::recv(uint8_t *data, size_t size) {
     }
 }
 
-void ARPController::reply(uint8_t *data, size_t size) {
-    auto *arp = reinterpret_cast<arp_t *>(data);
+void ARPController::reply(uint8_t const *data, size_t size) const {
+    auto *arp = reinterpret_cast<arp_t const *>(data);
     auto *resp = new arp_t();
 
     resp->opcode = static_cast<uint16_t>(Opcode::Reply);
@@ -42,7 +42,7 @@ void ARPController::reply(uint8_t *data, size_t size) {
     delete resp;
 }
 
-void ARPController::send(uint32_t ip_addr) {
+void ARPController::send(uint32_t ip_addr) const {
     auto *req = new arp_t();
 
     req->opcode = static_cast<uint16_t>(Opcode::Request);
@@ -67,12 +67,12 @@ void ARPController::send(uint32_t ip_addr) {
     delete req;
 }
 
-Ethernet::HwAddr ARPController::query(uint32_t ip_addr) {
+std::optional<Ethernet::HwAddr> ARPController::query(uint32_t ip_addr) {
     if (table.find(ip_addr) != table.end()) {
-        return table[ip_addr].first;
+        return std::optional<Ethernet::HwAddr>(table[ip_addr].first);
     } else {
-        return {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+        return std::nullopt;
     }
 }
 
-ARPController::ARPController(Ethernet &eth, NetworkDevice &dev) : eth(eth), dev(dev) {}
+ARPController::ARPController(const Ethernet &eth, const NetworkDevice &dev) : eth(eth), dev(dev) {}

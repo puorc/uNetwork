@@ -2,13 +2,14 @@
 
 NetworkDevice::NetworkDevice() : mtu(1500), ip_addr(ip_parse("10.0.0.4")) {
     _tun_id = tun_init();
-    mac_addr = new uint8_t[6];
-    sscanf("00:0c:29:6d:50:25", "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac_addr[0],
-           &mac_addr[1],
-           &mac_addr[2],
-           &mac_addr[3],
-           &mac_addr[4],
-           &mac_addr[5]);
+    auto *arr = new uint8_t[6];
+    sscanf("00:0c:29:6d:50:25", "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &arr[0],
+           &arr[1],
+           &arr[2],
+           &arr[3],
+           &arr[4],
+           &arr[5]);
+    mac_addr = arr;
 }
 
 int NetworkDevice::tun_init() {

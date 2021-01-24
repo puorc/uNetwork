@@ -31,9 +31,9 @@ public:
 
     using HwAddr = std::array<uint8_t, 6>;
 
-    ssize_t send(const HwAddr &dmac, Ethernet::protocol type, uint8_t *data, size_t len);
+    ssize_t send(const HwAddr &dmac, Ethernet::protocol type, uint8_t *data, size_t len) const;
 
-    Result recv();
+    Result recv() const;
 };
 
 

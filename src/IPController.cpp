@@ -1,32 +1,32 @@
 #include "IPController.h"
 
-Result IPController::recv() {
+Result IPController::recv() const {
     auto[data, protocol, size] = eth.recv();
     if (protocol == static_cast<uint16_t>(Ethernet::protocol::ARP)) {
         arp.recv(data, size);
         return Result{.data=nullptr, .protocol=0, .size=0};
-    }
-    if (size < sizeof(struct ipv4_t)) {
-        std::cout << "Invalid IPv4 packet. size too small" << std::endl;
+    } else if (protocol == static_cast<uint16_t>(Ethernet::protocol::IPv4)) {
+        auto *ipv4 = reinterpret_cast<ipv4_t const *>(data);
+        size_t header_length = (ipv4->ver_hl & 0x0f) * 4;
+        return Result{.data=data + header_length, .protocol=ipv4->protocol, .size=
+        ntohs(ipv4->datagram_len) - header_length};
+    } else {
+        std::cout << "Invalid IP packet. not supported" << std::endl;
         std::cout.flush();
         return Result{.data = nullptr, .protocol = 0, .size = 0};
     }
-
-    auto *ipv4 = reinterpret_cast<ipv4_t *>(data);
-//    if (ipv4->protocol != static_cast<uint8_t >(protocol::TCP)) {
-//        std::cout << "Not a TCP packet!";
-//        std::cout.flush();
-//        return Result{.data = nullptr, .protocol = ipv4->protocol, .size = 0};
-//    }
-    size_t header_length = (ipv4->ver_hl & 0x0f) * 4;
-    return Result{.data=data + header_length, .protocol=static_cast<uint8_t >(protocol::TCP), .size=
-    ntohs(ipv4->datagram_len) - header_length};
 }
 
-ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, size_t len) {
+ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, size_t len) const {
     uint32_t gateway = rtable.lookup(dst_ip);
     if (gateway == RouteTable::end) {
         std::cout << "No route found." << std::endl;
+        return 0;
+    }
+    auto dmac = arp.query(gateway);
+    if (!dmac.has_value()) {
+        std::cout << "No ARP mac found." << std::endl;
+        std::cout.flush();
         return 0;
     }
 
@@ -57,7 +57,7 @@ ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, siz
 
     ptr += sizeof(struct ipv4_t);
     memcpy(ptr, data, len);
-    ssize_t n = eth.send(arp.query(gateway), Ethernet::protocol::IPv4, buf, buf_size);
+    ssize_t n = eth.send(dmac.value(), Ethernet::protocol::IPv4, buf, buf_size);
     delete[] buf;
     return n;
 }
@@ -82,10 +82,9 @@ uint16_t IPController::calculate_checksum(IPController::ipv4_t *ip) {
     return res;
 }
 
-IPController::IPController(Ethernet &eth, ARPController &arp, NetworkDevice &device, RouteTable &rtable) : eth(eth),
-                                                                                                           arp(arp),
-                                                                                                           device(device),
-                                                                                                           rtable(rtable) {
+IPController::IPController(const Ethernet &eth, ARPController &arp, const NetworkDevice &device,
+                           const RouteTable &rtable) :
+        eth(eth), arp(arp), device(device), rtable(rtable) {
     arp.send(rtable.lookup(0));
     recv();
 }

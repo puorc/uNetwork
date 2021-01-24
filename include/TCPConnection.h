@@ -27,6 +27,7 @@ const uint16_t PSH_MASK = 0x0800;
 const uint16_t ACK_MASK = 0x1000;
 const uint16_t URG_MASK = 0x2000;
 
+const uint8_t IP_TCP = 0x06;
 
 class TCPConnection {
 private:
@@ -76,12 +77,12 @@ private:
 
 public:
     TCPConnection(uint32_t dst_ip, uint16_t port, IPController &ip)
-            : q(), state(State::CLOSED), dst_port(htons(port)), src_port(0xebac), dst_ip(dst_ip), src_ip(0x0400000a),
+            : q(), state(State::CLOSED), dst_port(htons(port)), src_port(0xebab), dst_ip(dst_ip), src_ip(0x0400000a),
               ack_number(0), send_base(0), ip(ip) {
         seq_number = rand() % 100000;
     }
 
-    void receive(uint8_t *data, size_t len);
+    void receive(uint8_t const *data, size_t len);
 
     void send(uint8_t *data, size_t len);
 

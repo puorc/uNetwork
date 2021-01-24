@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 
 struct Result {
-    uint8_t *data;
+    uint8_t const *data;
     uint16_t protocol;
     size_t size;
 };

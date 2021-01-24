@@ -10,10 +10,10 @@
 
 class IPController {
 private:
-    Ethernet &eth;
+    const Ethernet &eth;
     ARPController &arp;
-    NetworkDevice &device;
-    RouteTable &rtable;
+    const NetworkDevice &device;
+    const RouteTable &rtable;
 
     const uint8_t IPV4_VERSION = 0x40;
     const uint8_t IPV4_HEADER_LENGTH = 0x05;
@@ -35,14 +35,14 @@ private:
         TCP = 0x06
     };
 
-    uint16_t calculate_checksum(struct ipv4_t *ip);
+    static uint16_t calculate_checksum(struct ipv4_t *ip);
 
 public:
-    IPController(Ethernet &eth, ARPController &arp, NetworkDevice &device, RouteTable &rtable);
+    IPController(const Ethernet &eth, ARPController &arp, const NetworkDevice &device, const RouteTable &rtable);
 
-    ssize_t send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, size_t len);
+    ssize_t send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, size_t len) const;
 
-    Result recv();
+    Result recv() const;
 };
 
 

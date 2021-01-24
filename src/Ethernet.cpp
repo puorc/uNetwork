@@ -8,7 +8,7 @@ Ethernet::~Ethernet() {
     delete[] _buf;
 }
 
-ssize_t Ethernet::send(const HwAddr &dmac, Ethernet::protocol type, uint8_t *data, size_t len) {
+ssize_t Ethernet::send(const HwAddr &dmac, Ethernet::protocol type, uint8_t *data, size_t len) const {
     size_t buf_size = sizeof(struct ethernet_t) + len;
     auto *buf = new uint8_t[buf_size];
     uint8_t *ptr = buf;
@@ -26,7 +26,7 @@ ssize_t Ethernet::send(const HwAddr &dmac, Ethernet::protocol type, uint8_t *dat
     return n;
 }
 
-Result Ethernet::recv() {
+Result Ethernet::recv() const {
     ssize_t n;
     if ((n = device.tun_read(_buf, device.mtu)) <= 0) {
         return Result{.data=nullptr, .protocol=0, .size=0};

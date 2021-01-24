@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <queue>
 #include <iostream>
-#include <mutex>
 #include <unordered_map>
+#include <optional>
 #include "Ethernet.h"
 #include "NetworkDevice.h"
 
@@ -33,25 +33,25 @@ private:
 
     using AddrTTL = std::pair<time_t, uint32_t>;
 
-    Ethernet &eth;
-    NetworkDevice &dev;
+    const Ethernet &eth;
+    const NetworkDevice &dev;
     std::unordered_map<uint32_t, std::pair<Ethernet::HwAddr, time_t>> table;
     std::priority_queue<AddrTTL, std::vector<AddrTTL>, std::greater<>> q;
 
-    void reply(uint8_t *data, size_t size);
+    void reply(uint8_t const *data, size_t size) const;
 
 public:
-    ARPController(Ethernet &eth, NetworkDevice &dev);
+    ARPController(const Ethernet &eth, const NetworkDevice &dev);
 
     ARPController(ARPController const &) = delete;
 
     void operator=(ARPController const &) = delete;
 
-    void recv(uint8_t *data, size_t size);
+    void recv(uint8_t const *data, size_t size);
 
-    void send(uint32_t ip_addr);
+    void send(uint32_t ip_addr) const;
 
-    Ethernet::HwAddr query(uint32_t ip_addr);
+    std::optional<Ethernet::HwAddr> query(uint32_t ip_addr);
 };
 
 
