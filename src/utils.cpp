@@ -1,5 +1,13 @@
 #include "utils.h"
 
+uint32_t ip_parse(char const *addr) {
+    uint32_t dst = 0;
+    if (inet_pton(AF_INET, addr, &dst) != 1) {
+        return dst;
+    }
+    return dst;
+}
+
 static uint32_t sum_every_16bits(void *addr, int count) {
     uint32_t sum = 0;
     uint16_t *ptr = static_cast<uint16_t *>(addr);

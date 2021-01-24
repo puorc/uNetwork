@@ -18,12 +18,19 @@ void TCPConnection::send(uint8_t *data, size_t len, uint16_t flags) {
     tcp->checksum = tcp_udp_checksum(src_ip, dst_ip, IP_TCP, buf, total_len);
 
     ssize_t n;
-    if ((n = ipv4_send(src_ip, dst_ip, IP_TCP, buf, total_len)) < 0) {
+    if ((n = ip.send(dst_ip, IP_TCP, buf, total_len)) < 0) {
         std::cout << "send failure. retransmit scheduled";
         std::cout.flush();
         delete[] buf;
         return;
     }
+
+//    if ((n = ipv4_send(src_ip, dst_ip, IP_TCP, buf, total_len)) < 0) {
+//        std::cout << "send failure. retransmit scheduled";
+//        std::cout.flush();
+//        delete[] buf;
+//        return;
+//    }
     delete[] buf;
     inc_seq_number(flags, len);
 }

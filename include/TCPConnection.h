@@ -5,8 +5,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include "ipv4.h"
 #include "utils.h"
+#include "IPController.h"
 
 struct tcp_t {
     uint16_t src_port;
@@ -48,6 +48,7 @@ private:
     uint16_t dst_port;
     uint32_t dst_ip;
     uint32_t src_ip;
+    IPController &ip;
 
     void send(uint8_t *data, size_t len, uint16_t flags);
 
@@ -74,9 +75,9 @@ private:
     }
 
 public:
-    TCPConnection(uint32_t dst_ip, uint16_t port)
-            : q(), state(State::CLOSED), dst_port(htons(port)), src_port(0xebab), dst_ip(dst_ip), src_ip(0x0400000a),
-              ack_number(0), send_base(0) {
+    TCPConnection(uint32_t dst_ip, uint16_t port, IPController &ip)
+            : q(), state(State::CLOSED), dst_port(htons(port)), src_port(0xebac), dst_ip(dst_ip), src_ip(0x0400000a),
+              ack_number(0), send_base(0), ip(ip) {
         seq_number = rand() % 100000;
     }
 

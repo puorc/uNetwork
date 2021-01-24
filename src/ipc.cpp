@@ -21,9 +21,9 @@ int create_socket(int sockfd, struct ipc_msg *msg) {
     err.rc = 8080;
     memcpy(response->data, &err, sizeof(struct ipc_err));
 //    ipc_try_send(sockfd, (char *)response, resplen)
-//    send(sockfd, buf, len, MSG_NOSIGNAL)
-//    send(sockfd, buf, len, MSG_NOSIGNAL)
-//sendto(fd, buf, len,
+//    send(sockfd, _buf, len, MSG_NOSIGNAL)
+//    send(sockfd, _buf, len, MSG_NOSIGNAL)
+//sendto(fd, _buf, len,
 //                                        get_flags, dest_addr, dest_len)
     int res = sendto(sockfd, response, resplen,
                      MSG_NOSIGNAL, NULL, 0);
@@ -45,7 +45,7 @@ void process_socket(int fd, int datasock) {
     sock_fd = datasock;
 
     while ((rc = read(fd, buf, LEN)) > 0) {
-        std::cout << "receive buf" << rc << buf << std::endl;
+        std::cout << "receive _buf" << rc << buf << std::endl;
         struct ipc_msg *msg = reinterpret_cast<ipc_msg *>(buf);
         std::cout << "the type of message of " << msg->type;
         switch (msg->type) {
