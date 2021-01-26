@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <random>
+#include <functional>
+#include <utility>
 #include "utils.h"
 #include "IPController.h"
 
@@ -40,18 +43,23 @@ private:
         TIME_WAIT
     };
 
+    std::function<void()> _established_cb;
+    std::function<void()> _close_cb;
+    std::function<void(int)> _send_cb;
+    std::function<void(uint8_t *, size_t)> _recv_cb;
+
     std::queue<struct tcp_t *> q;
     uint32_t seq_number;
     uint32_t ack_number;
     uint32_t send_base;
     State state;
-    uint16_t src_port;
-    uint16_t dst_port;
-    uint32_t dst_ip;
-    uint32_t src_ip;
-    IPController &ip;
+    uint16_t _src_port;
+    uint16_t _dst_port;
+    uint32_t _src_ip;
+    uint32_t _dst_ip;
+    IPController const &ip;
 
-    void send(uint8_t *data, size_t len, uint16_t flags);
+    ssize_t send(const uint8_t *data, size_t len, uint16_t flags);
 
     void inc_seq_number(uint16_t flags, size_t payload_size);
 
@@ -76,17 +84,36 @@ private:
     }
 
 public:
-    TCPConnection(uint32_t dst_ip, uint16_t port, IPController &ip)
-            : q(), state(State::CLOSED), dst_port(htons(port)), src_port(0xebab), dst_ip(dst_ip), src_ip(0x0400000a),
+    TCPConnection(uint16_t port, uint32_t src_ip, IPController const &ip)
+            : q(), state(State::CLOSED), _src_port(htons(port)), _src_ip(src_ip), _dst_port(0), _dst_ip(0),
               ack_number(0), send_base(0), ip(ip) {
-        seq_number = rand() % 100000;
+        std::random_device r;
+        std::default_random_engine e1(r());
+        std::uniform_int_distribution<uint32_t> uniform_dist;
+        seq_number = uniform_dist(e1);
     }
 
-    void receive(uint8_t const *data, size_t len);
+    void recv(uint8_t const *data, size_t len);
 
-    void send(uint8_t *data, size_t len);
+    void send(const uint8_t *data, size_t len);
 
-    void init();
+    void init(uint32_t dst_ip, uint16_t dst_port);
+
+    void onEstablished(std::function<void()> cb) {
+        _established_cb = std::move(cb);
+    }
+
+    void onClose(std::function<void()> cb) {
+        _close_cb = std::move(cb);
+    }
+
+    void onSend(std::function<void(int)> cb) {
+        _send_cb = std::move(cb);
+    }
+
+    void onRecv(std::function<void(uint8_t *, size_t)> cb) {
+        _recv_cb = std::move(cb);
+    }
 };
 
 

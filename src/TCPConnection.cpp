@@ -1,12 +1,12 @@
 #include "TCPConnection.h"
 
-void TCPConnection::send(uint8_t *data, size_t len, uint16_t flags) {
+ssize_t TCPConnection::send(const uint8_t *data, size_t len, uint16_t flags) {
     size_t total_len = len + sizeof(struct tcp_t);
     auto *buf = new uint8_t[total_len];
 
     auto *tcp = reinterpret_cast<tcp_t *>(buf);
-    tcp->src_port = src_port;
-    tcp->dst_port = dst_port;
+    tcp->src_port = _src_port;
+    tcp->dst_port = _dst_port;
     tcp->seq = seq_number;
     tcp->ack = ack_number;
     tcp->flags = flags;
@@ -14,37 +14,25 @@ void TCPConnection::send(uint8_t *data, size_t len, uint16_t flags) {
     tcp->checksum = 0;
     tcp->urgent_pt = 0;
 
-    memcpy(buf + sizeof(struct tcp_t), data, len);
-    tcp->checksum = tcp_udp_checksum(src_ip, dst_ip, IP_TCP, buf, total_len);
+    std::copy(data, data + len, buf + sizeof(struct tcp_t));
+    tcp->checksum = tcp_udp_checksum(_src_ip, _dst_ip, IP_TCP, buf, total_len);
 
-    ssize_t n;
-    if ((n = ip.send(dst_ip, IP_TCP, buf, total_len)) < 0) {
-        std::cout << "send failure. retransmit scheduled";
-        std::cout.flush();
-        delete[] buf;
-        return;
+    ssize_t n = ip.send(_dst_ip, IP_TCP, buf, total_len);
+    if (n > 0) {
+        inc_seq_number(flags, len);
     }
-
-//    if ((n = ipv4_send(src_ip, dst_ip, IP_TCP, buf, total_len)) < 0) {
-//        std::cout << "send failure. retransmit scheduled";
-//        std::cout.flush();
-//        delete[] buf;
-//        return;
-//    }
     delete[] buf;
-    inc_seq_number(flags, len);
+    return n;
 }
 
-void TCPConnection::init() {
-    send(nullptr, 0, get_flags({SYN_MASK}));
-    state = State::SYN_SEND;
+void TCPConnection::send(const uint8_t *data, size_t len) {
+    ssize_t n = send(data, len, get_flags({PSH_MASK, ACK_MASK}));
+    if (n != len) {
+        // retransmit
+    }
 }
 
-void TCPConnection::send(uint8_t *data, size_t len) {
-    send(data, len, get_flags({PSH_MASK, ACK_MASK}));
-}
-
-void TCPConnection::receive(uint8_t const *data, size_t len) {
+void TCPConnection::recv(uint8_t const *data, size_t len) {
     auto *tcp = reinterpret_cast<tcp_t const *>(data);
     uint16_t flags = tcp->flags;
     uint16_t header_len = ((flags & 0x00f0) >> 4) * 4;
@@ -63,14 +51,18 @@ void TCPConnection::receive(uint8_t const *data, size_t len) {
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));
         state = State::ESTABLISHED;
-        return;
+        if (_established_cb) {
+            _established_cb();
+        }
     } else if (is_fin(flags)) {
         inc_ack_number(flags, payload_size);
         state = State::FIN_WAIT_1;
         send(nullptr, 0, get_flags({ACK_MASK, FIN_MASK}));
+        if (_close_cb) {
+            _close_cb();
+        }
     } else if (payload_size > 0) {
         uint8_t const *payload = data + header_len;
-        std::cout << "payload is" << std::endl << payload << std::endl;
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));
     }
@@ -101,4 +93,10 @@ uint16_t TCPConnection::get_flags(std::initializer_list<uint16_t> masks, uint16_
     return base;
 }
 
+void TCPConnection::init(uint32_t dst_ip, uint16_t dst_port) {
+    _dst_ip = dst_ip;
+    _dst_port = htons(dst_port);
+    send(nullptr, 0, get_flags({SYN_MASK}));
+    state = State::SYN_SEND;
+}
 

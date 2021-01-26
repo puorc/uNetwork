@@ -45,7 +45,7 @@ void process_socket(int fd, int datasock) {
     sock_fd = datasock;
 
     while ((rc = read(fd, buf, LEN)) > 0) {
-        std::cout << "receive _buf" << rc << buf << std::endl;
+        std::cout << "recv _buf" << rc << buf << std::endl;
         struct ipc_msg *msg = reinterpret_cast<ipc_msg *>(buf);
         std::cout << "the type of message of " << msg->type;
         switch (msg->type) {

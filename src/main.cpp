@@ -12,8 +12,10 @@ int main() {
     RouteTable rtable(device);
     ARPController arp(eth, device);
     IPController ip(eth, arp, device, rtable);
-    TCPController tcp(ip);
+    TCPController tcp(ip, device);
 
+    uint16_t port = tcp.alloc();
+    tcp.init(port, 0x2ed93ad8, 80);
     bool doit = false;
     while (true) {
         tcp.recv();

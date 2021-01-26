@@ -56,8 +56,8 @@ int tcp_udp_checksum(uint32_t saddr, uint32_t daddr, uint8_t proto,
 //static uint16_t calculate_checksum(uint8_t *tcp) {
 //    uint16_t res = 0;
 //    struct pseudo_ip pseudo;
-//    pseudo.dst_ip = 0x4ec13ad8;
-//    pseudo.src_ip = 0x0400000a;
+//    pseudo._dst_ip = 0x4ec13ad8;
+//    pseudo._src_ip = 0x0400000a;
 //    pseudo.reserved = 0;
 //    pseudo.protocol = IP_TCP;
 //    pseudo.length = htobe16(20);
