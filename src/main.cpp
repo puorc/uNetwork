@@ -1,9 +1,11 @@
+#include <thread>
 #include "NetworkDevice.h"
 #include "ARPController.h"
 #include "Ethernet.h"
 #include "IPController.h"
 #include "TCPController.h"
 #include "RouteTable.h"
+#include "MessageListener.h"
 
 
 int main() {
@@ -13,22 +15,16 @@ int main() {
     ARPController arp(eth, device);
     IPController ip(eth, arp, device, rtable);
     TCPController tcp(ip, device);
+    MessageListener listener(tcp);
 
-    uint16_t port = tcp.alloc();
-    tcp.init(port, 0x2ed93ad8, 80);
+    int fd = tcp.alloc();
+    tcp.init(fd, 0x2ed93ad8, 80);
     bool doit = false;
     while (true) {
         tcp.recv();
-//        const char *tosend = "GET / HTTP/1.1\r\nHost: google.com:80\r\nConnection: close\r\n\r\n";
-//        if (!doit) {
-//            tcp.send(0, (uint8_t *) tosend, 58);
-//            doit = true;
-//        }
     }
-
-
-//    std::thread t1(read_loop);
-//    std::thread t2(rx_loop);
+//    std::thread t1([&]() { while (1) { tcp.recv(); }});
+//    std::thread t2([&]() { listener.start(); });
 //    t1.join();
 //    t2.join();
     return 0;
