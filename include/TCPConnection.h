@@ -8,6 +8,8 @@
 #include <random>
 #include <functional>
 #include <utility>
+#include <condition_variable>
+#include <mutex>
 #include "utils.h"
 #include "IPController.h"
 
@@ -43,10 +45,9 @@ private:
         TIME_WAIT
     };
 
-    std::function<void()> _established_cb;
+    std::function<void(int)> _established_cb;
     std::function<void()> _close_cb;
     std::function<void(int)> _send_cb;
-    std::function<void(uint8_t *, size_t)> _recv_cb;
 
     std::queue<struct tcp_t *> q;
     uint32_t seq_number;
@@ -58,6 +59,10 @@ private:
     uint32_t _src_ip;
     uint32_t _dst_ip;
     IPController const &ip;
+    std::mutex _m;
+    std::deque<uint8_t> _buffer;
+    std::condition_variable cv;
+    bool _buffer_ready = false;
 
     ssize_t send(const uint8_t *data, size_t len, uint16_t flags);
 
@@ -86,7 +91,7 @@ private:
 public:
     TCPConnection(uint16_t port, uint32_t src_ip, IPController const &ip)
             : q(), state(State::CLOSED), _src_port(htons(port)), _src_ip(src_ip), _dst_port(0), _dst_ip(0),
-              ack_number(0), send_base(0), ip(ip) {
+              ack_number(0), send_base(0), ip(ip), _buffer(), cv() {
         std::random_device r;
         std::default_random_engine e1(r());
         std::uniform_int_distribution<uint32_t> uniform_dist;
@@ -99,7 +104,9 @@ public:
 
     void init(uint32_t dst_ip, uint16_t dst_port);
 
-    void onEstablished(std::function<void()> cb) {
+    ssize_t read(uint8_t *buf, size_t size);
+
+    void onEstablished(std::function<void(int)> cb) {
         _established_cb = std::move(cb);
     }
 
@@ -109,10 +116,6 @@ public:
 
     void onSend(std::function<void(int)> cb) {
         _send_cb = std::move(cb);
-    }
-
-    void onRecv(std::function<void(uint8_t *, size_t)> cb) {
-        _recv_cb = std::move(cb);
     }
 };
 

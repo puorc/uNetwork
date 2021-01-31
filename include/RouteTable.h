@@ -5,7 +5,7 @@
 
 #include <cstdint>
 #include <vector>
-#include "NetworkDevice.h"
+#include "utils.h"
 
 class RouteTable {
 private:
@@ -25,7 +25,7 @@ private:
 
     std::vector<Entry> table;
 public:
-    explicit RouteTable(const NetworkDevice &device);
+    explicit RouteTable(char const *gateway_ip);
 
     uint32_t lookup(uint32_t target) const;
 

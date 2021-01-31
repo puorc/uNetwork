@@ -13,10 +13,11 @@ void TCPController::recv() {
     }
 }
 
-void TCPController::send(int fd, const uint8_t *data, size_t size) {
+void TCPController::send(int fd, const uint8_t *data, size_t size, std::function<void(int)> callback) {
 //    std::shared_lock lock(mutex_);
     if (connections.find(fd) != connections.end()) {
         auto conn = connections[fd];
+        conn->onSend(std::move(callback));
         conn->send(data, size);
     }
 }
@@ -27,18 +28,23 @@ int TCPController::alloc() {
     int fd = ++_fd;
     port_fd_map[src_port] = fd;
     auto conn = std::make_shared<TCPConnection>(src_port, device.ip_addr, ip);
-    conn->onEstablished([]() {
-        std::cout << "established!" << std::endl;
-        std::cout.flush();
-    });
     connections[fd] = conn;
     return fd;
 }
 
-void TCPController::init(int fd, uint32_t dst_ip, uint16_t dst_port) {
+void TCPController::init(int fd, uint32_t dst_ip, uint16_t dst_port, std::function<void(int)> init_cb) {
 //    std::shared_lock lock(mutex_);
     if (connections.find(fd) != connections.end()) {
         auto conn = connections[fd];
+        conn->onEstablished(std::move(init_cb));
         conn->init(dst_ip, dst_port);
     }
+}
+
+ssize_t TCPController::read(int fd, uint8_t *buf, size_t size) {
+    if (connections.find(fd) != connections.end()) {
+        auto conn = connections[fd];
+        return conn->read(buf, size);
+    }
+    return 0;
 }

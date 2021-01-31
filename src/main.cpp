@@ -9,23 +9,20 @@
 
 
 int main() {
+    char const *gateway_ip = "10.0.0.5";
+
     NetworkDevice device;
     Ethernet eth(device);
-    RouteTable rtable(device);
+    RouteTable rtable(gateway_ip);
+
     ARPController arp(eth, device);
     IPController ip(eth, arp, device, rtable);
     TCPController tcp(ip, device);
     MessageListener listener(tcp);
 
-    int fd = tcp.alloc();
-    tcp.init(fd, 0x2ed93ad8, 80);
-    bool doit = false;
-    while (true) {
-        tcp.recv();
-    }
-//    std::thread t1([&]() { while (1) { tcp.recv(); }});
-//    std::thread t2([&]() { listener.start(); });
-//    t1.join();
-//    t2.join();
+    std::thread t1([&]() { while (1) { tcp.recv(); }});
+    std::thread t2([&]() { listener.start(); });
+    t1.join();
+    t2.join();
     return 0;
 }

@@ -1,7 +1,7 @@
 #include "RouteTable.h"
 
-RouteTable::RouteTable(const NetworkDevice &device) {
-    table.push_back(Entry{.dst = 0, .gateway=ip_parse("10.0.0.5"), .genmask=0, .flags=Entry::Type::Gateway});
+RouteTable::RouteTable(const char *gateway_ip) {
+    table.push_back(Entry{.dst = 0, .gateway=ip_parse(gateway_ip), .genmask=0, .flags=Entry::Type::Gateway});
 }
 
 uint32_t RouteTable::lookup(uint32_t target) const {

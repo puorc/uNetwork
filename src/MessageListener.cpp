@@ -44,12 +44,48 @@ void MessageListener::process(int fd) {
             case IPC_SOCKET:
                 reply(fd, IPC_SOCKET, msg->pid, tcp.alloc());
                 break;
-            case IPC_CONNECT:
-                std::cout.flush();
+            case IPC_CONNECT: {
                 auto *data = reinterpret_cast<ipc_connect *>(msg->data);
-                tcp.init(data->sockfd, data->addr.sin_addr.s_addr, 80);
-                reply(fd, IPC_CONNECT, msg->pid, 0);
+                tcp.init(data->sockfd, data->addr.sin_addr.s_addr, 80, [&](int rc) {
+                    reply(fd, IPC_CONNECT, msg->pid, rc);
+                });
                 break;
+            }
+            case IPC_READ: {
+                pid_t pid = msg->pid;
+                auto *payload = reinterpret_cast<ipc_read *>(msg->data);
+                uint8_t rbuf[payload->len];
+                ssize_t n = tcp.read(payload->sockfd, rbuf, payload->len);
+
+                size_t resplen = sizeof(struct ipc_msg) + sizeof(struct ipc_err) +
+                                 sizeof(struct ipc_read) + payload->len;
+                auto *response = reinterpret_cast<ipc_msg *>(new uint8_t[resplen]);
+                auto *error = reinterpret_cast<ipc_err *>(response->data);
+                auto *actual = reinterpret_cast<ipc_read *>(error->data);
+
+                response->type = IPC_READ;
+                response->pid = pid;
+
+                error->rc = n;
+                error->err = 0;
+
+                actual->sockfd = payload->sockfd;
+                actual->len = n;
+                std::copy(rbuf, rbuf + payload->len, actual->buf);
+                send(fd, response, resplen, MSG_NOSIGNAL);
+                break;
+            }
+            case IPC_WRITE: {
+                auto *data = reinterpret_cast<ipc_write *>(msg->data);
+                tcp.send(data->sockfd, data->buf, data->len, [&](int size) {
+                    reply(fd, IPC_WRITE, msg->pid, data->len);
+                });
+                break;
+            }
+            case IPC_CLOSE: {
+                pid_t pid = msg->pid;
+                reply(fd, IPC_CLOSE, pid, rc);
+            }
         }
     }
     close(fd);

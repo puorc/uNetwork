@@ -23,12 +23,12 @@ ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, siz
         std::cout << "No route found." << std::endl;
         return 0;
     }
-    auto dmac = arp.query(gateway);
-    if (!dmac.has_value()) {
-        std::cout << "No ARP mac found." << std::endl;
-        std::cout.flush();
-        return 0;
-    }
+//    auto dmac = arp.query(gateway);
+//    if (!dmac.has_value()) {
+//        std::cout << "No ARP mac found." << std::endl;
+//        std::cout.flush();
+//        return 0;
+//    }
 
     size_t buf_size = sizeof(struct ipv4_t) + len;
     auto *buf = new uint8_t[buf_size];
@@ -53,11 +53,11 @@ ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, siz
     ipv4->checksum = 0;
     ipv4->src_ip = device.ip_addr;
     ipv4->dst_ip = dst_ip;
-    ipv4->checksum = calculate_checksum(ipv4);
+    ipv4->checksum = checksum(ipv4, 20, 0);
 
     ptr += sizeof(struct ipv4_t);
     memcpy(ptr, data, len);
-    ssize_t n = eth.send(dmac.value(), Ethernet::protocol::IPv4, buf, buf_size);
+    ssize_t n = eth.send({0x86, 0x3b, 0x9a, 0x02, 0x85, 0x13}, Ethernet::protocol::IPv4, buf, buf_size);
     delete[] buf;
     return n;
 }

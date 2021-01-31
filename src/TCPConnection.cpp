@@ -27,6 +27,9 @@ ssize_t TCPConnection::send(const uint8_t *data, size_t len, uint16_t flags) {
 
 void TCPConnection::send(const uint8_t *data, size_t len) {
     ssize_t n = send(data, len, get_flags({PSH_MASK, ACK_MASK}));
+    if (_send_cb) {
+        _send_cb(n);
+    }
     if (n != len) {
         // retransmit
     }
@@ -37,8 +40,7 @@ void TCPConnection::recv(uint8_t const *data, size_t len) {
     uint16_t flags = tcp->flags;
     uint16_t header_len = ((flags & 0x00f0) >> 4) * 4;
     if (header_len > len) {
-        std::cerr << "malformed TCP segment. Size too small";
-        std::cerr.flush();
+        std::cerr << "malformed TCP segment. Size too small." << std::endl;
         return;
     }
     size_t payload_size = len - header_len;
@@ -52,7 +54,7 @@ void TCPConnection::recv(uint8_t const *data, size_t len) {
         send(nullptr, 0, get_flags({ACK_MASK}));
         state = State::ESTABLISHED;
         if (_established_cb) {
-            _established_cb();
+            _established_cb(0);
         }
     } else if (is_fin(flags)) {
         inc_ack_number(flags, payload_size);
@@ -65,6 +67,11 @@ void TCPConnection::recv(uint8_t const *data, size_t len) {
         uint8_t const *payload = data + header_len;
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));
+        std::unique_lock<std::mutex> lck(_m);
+        _buffer.insert(_buffer.end(), payload, payload + payload_size);
+        _buffer_ready = true;
+        lck.unlock();
+        cv.notify_one();
     }
 }
 
@@ -100,3 +107,19 @@ void TCPConnection::init(uint32_t dst_ip, uint16_t dst_port) {
     state = State::SYN_SEND;
 }
 
+ssize_t TCPConnection::read(uint8_t *buf, size_t size) {
+    std::unique_lock lck(_m);
+    cv.wait(lck, [&] { return _buffer_ready; });
+    if (_buffer.empty()) {
+        return 0;
+    }
+    if (size > _buffer.size()) {
+        std::copy(_buffer.begin(), _buffer.end(), buf);
+        _buffer.erase(_buffer.begin(), _buffer.end());
+        return _buffer.size();
+    } else {
+        std::copy(_buffer.begin(), _buffer.begin() + size, buf);
+        _buffer.erase(_buffer.begin(), _buffer.begin() + size);
+        return size;
+    }
+}

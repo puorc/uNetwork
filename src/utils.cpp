@@ -25,7 +25,7 @@ static uint32_t sum_every_16bits(void *addr, int count) {
     return sum;
 }
 
-static uint16_t checksum(void *addr, int count, int start_sum) {
+uint16_t checksum(void *addr, int count, int start_sum) {
     /* Compute Internet Checksum for "count" bytes
      *         beginning at location "addr".
      * Taken from https://tools.ietf.org/html/rfc1071
