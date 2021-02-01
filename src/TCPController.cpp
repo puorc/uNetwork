@@ -13,11 +13,13 @@ void TCPController::recv() {
     }
 }
 
-void TCPController::send(int fd, const uint8_t *data, size_t size, std::function<void(int)> callback) {
+ssize_t TCPController::write(int fd, uint8_t const *data, size_t size) {
 //    std::shared_lock lock(mutex_);
     if (connections.find(fd) != connections.end()) {
         auto conn = connections[fd];
-        conn->send(data, size);
+        return conn->write(data, size);
+    } else {
+        return -1;
     }
 }
 
@@ -46,4 +48,13 @@ ssize_t TCPController::read(int fd, uint8_t *buf, size_t size) {
         return conn->read(buf, size);
     }
     return 0;
+}
+
+int TCPController::close(int fd) {
+    if (connections.find(fd) != connections.end()) {
+        auto conn = connections[fd];
+        conn->close();
+        return 0;
+    }
+    return -1;
 }

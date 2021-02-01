@@ -82,30 +82,25 @@ void TCPConnection::recv(uint8_t const *data, size_t len) noexcept {
         if (_established_cb) {
             _established_cb(0);
         }
-    } else if (is_fin(flags)) {
-        inc_ack_number(flags, payload_size);
-        state = State::FIN_WAIT_1;
-        send(nullptr, 0, get_flags({ACK_MASK, FIN_MASK}));
+        return;
+    }
+    if (is_fin(flags) || payload_size > 0) {
         {
-            std::cout << "fin" << std::endl;
-            std::unique_lock lck(_read_m);
+            std::unique_lock<std::mutex> lck(_read_m);
+            if (payload_size > 0) {
+                uint8_t const *payload = data + header_len;
+                _recv_buf.insert(_recv_buf.end(), payload, payload + payload_size);
+            }
             _buffer_ready = true;
             lck.unlock();
             _cv.notify_one();
-            std::cout << "notified" << std::endl;
         }
-        if (_close_cb) {
-            _close_cb();
+        if (is_fin(flags)) {
+            state = State::CLOSE_WAIT;
         }
-    } else if (payload_size > 0) {
-        uint8_t const *payload = data + header_len;
+
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));
-        std::unique_lock<std::mutex> lck(_read_m);
-        _recv_buf.insert(_recv_buf.end(), payload, payload + payload_size);
-        _buffer_ready = true;
-        lck.unlock();
-        _cv.notify_one();
     }
 }
 
@@ -118,11 +113,18 @@ void TCPConnection::inc_seq_number(uint16_t flags, size_t payload_size) {
 }
 
 void TCPConnection::inc_ack_number(uint16_t flags, size_t payload_size) {
-    if (is_syn(flags) || is_fin(flags)) {
+    if (is_syn(flags)) {
         ack_number = nl_add_hl(ack_number, 1);
-    } else if (payload_size != 0) {
-        ack_number = nl_add_hl(ack_number, (uint32_t) payload_size);
+        return;
     }
+    uint32_t total = 0;
+    if (is_fin(flags)) {
+        ++total;
+    }
+    if (payload_size != 0) {
+        total += payload_size;
+    }
+    ack_number = nl_add_hl(ack_number, total);
 }
 
 uint16_t TCPConnection::get_flags(std::initializer_list<uint16_t> masks, uint16_t header_len) {
@@ -166,7 +168,9 @@ ssize_t TCPConnection::read(uint8_t *buf, size_t size) {
         size_t read_size = _recv_buf.size();
         std::copy(_recv_buf.begin(), _recv_buf.end(), buf);
         _recv_buf.clear();
-        _buffer_ready = false;
+        if (state == State::ESTABLISHED) {
+            _buffer_ready = false;
+        }
         return read_size;
     } else {
         std::copy(_recv_buf.begin(), _recv_buf.begin() + size, buf);
@@ -179,4 +183,9 @@ ssize_t TCPConnection::write(uint8_t const *buf, size_t size) {
     std::unique_lock lck(_write_m);
     _send_buf.insert(_send_buf.end(), buf, buf + size);
     return size;
+}
+
+void TCPConnection::close() {
+    send(nullptr, 0, get_flags({FIN_MASK, ACK_MASK}));
+    state = State::CLOSED;
 }

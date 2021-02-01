@@ -77,14 +77,14 @@ void MessageListener::process(int fd) {
             }
             case IPC_WRITE: {
                 auto *data = reinterpret_cast<ipc_write *>(msg->data);
-                tcp.send(data->sockfd, data->buf, data->len, [&](int size) {
-
-                });
+                tcp.write(data->sockfd, data->buf, data->len);
                 reply(fd, IPC_WRITE, msg->pid, data->len);
                 break;
             }
             case IPC_CLOSE: {
                 pid_t pid = msg->pid;
+                auto *payload = (struct ipc_close *) msg->data;
+                tcp.close(payload->sockfd);
                 reply(fd, IPC_CLOSE, pid, rc);
             }
         }

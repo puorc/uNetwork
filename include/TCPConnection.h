@@ -45,7 +45,8 @@ private:
         ESTABLISHED,
         FIN_WAIT_1,
         FIN_WAIT_2,
-        TIME_WAIT
+        TIME_WAIT,
+        CLOSE_WAIT,
     };
     IPController const &ip;
 
@@ -113,6 +114,8 @@ public:
     ssize_t read(uint8_t *buf, size_t size);
 
     ssize_t write(uint8_t const *buf, size_t size);
+
+    void close();
 
     void onEstablished(std::function<void(int)> cb) {
         _established_cb = std::move(cb);

@@ -7,12 +7,11 @@
 #include <atomic>
 #include <shared_mutex>
 #include "utils.h"
-#include "IPController.h"
 #include "TCPConnection.h"
 
 class TCPController {
 private:
-    mutable std::shared_mutex mutex_;
+    std::shared_mutex mutex_;
     int _port{49156};
     int _fd{1000};
     IPController const &ip;
@@ -27,11 +26,13 @@ public:
 
     void recv();
 
-    void send(int fd, uint8_t const *data, size_t size, std::function<void(int)> callback);
-
     void init(int fd, uint32_t dst_ip, uint16_t dst_port, std::function<void(int)> init_cb);
 
+    ssize_t write(int fd, uint8_t const *data, size_t size);
+
     ssize_t read(int fd, uint8_t *buf, size_t size);
+
+    int close(int fd);
 };
 
 

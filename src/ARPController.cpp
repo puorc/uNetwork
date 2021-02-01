@@ -32,7 +32,7 @@ void ARPController::reply(uint8_t const *data, size_t size) const {
     std::copy(dev.mac_addr, dev.mac_addr + 6, resp->sender_hw_addr);
 
     Ethernet::HwAddr addr;
-    std::copy(dev.mac_addr, dev.mac_addr + 6, std::begin(addr));
+    std::copy(arp->sender_hw_addr, arp->sender_hw_addr + 6, std::begin(addr));
 
     ssize_t n = eth.send(addr, Ethernet::protocol::ARP, reinterpret_cast<uint8_t *>(resp), sizeof(struct arp_t));
     if (n <= 0) {
