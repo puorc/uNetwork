@@ -1,3 +1,4 @@
+#include <thread>
 #include "TCPConnection.h"
 
 ssize_t TCPConnection::send(const uint8_t *data, size_t len, uint16_t flags) {
@@ -26,16 +27,31 @@ ssize_t TCPConnection::send(const uint8_t *data, size_t len, uint16_t flags) {
 }
 
 void TCPConnection::send(const uint8_t *data, size_t len) {
-    ssize_t n = send(data, len, get_flags({PSH_MASK, ACK_MASK}));
-    if (_send_cb) {
-        _send_cb(n);
-    }
-    if (n != len) {
-        // retransmit
-    }
+    send(data, len, get_flags({PSH_MASK, ACK_MASK}));
 }
 
-void TCPConnection::recv(uint8_t const *data, size_t len) {
+void TCPConnection::send() {
+    std::unique_lock lck(_write_m);
+    size_t size = _send_buf.size();
+    if (size == 0) {
+        return;
+    }
+    auto *tosend = new uint8_t[std::max(size, MSS)];
+    if (size <= MSS) {
+        std::copy(_send_buf.begin(), _send_buf.end(), tosend);
+        send(tosend, size);
+        _ack_buf.insert(_ack_buf.end(), _send_buf.begin(), _send_buf.end());
+        _send_buf.clear();
+    } else {
+        std::copy(_send_buf.begin(), _send_buf.begin() + MSS, tosend);
+        send(tosend, MSS);
+        _ack_buf.insert(_ack_buf.end(), _send_buf.begin(), _send_buf.begin() + MSS);
+        _send_buf.erase(_send_buf.begin(), _send_buf.begin() + MSS);
+    }
+    delete[] tosend;
+}
+
+void TCPConnection::recv(uint8_t const *data, size_t len) noexcept {
     auto *tcp = reinterpret_cast<tcp_t const *>(data);
     uint16_t flags = tcp->flags;
     uint16_t header_len = ((flags & 0x00f0) >> 4) * 4;
@@ -46,7 +62,17 @@ void TCPConnection::recv(uint8_t const *data, size_t len) {
     size_t payload_size = len - header_len;
 
     if (is_ack(flags)) {
-        send_base = std::max(ntohl(tcp->ack), send_base);
+        std::unique_lock lck(_write_m);
+        uint32_t acked = ntohl(tcp->ack);
+        if (acked > _send_base) {
+            if (acked - _send_base >= _ack_buf.size()) {
+                _ack_buf.clear();
+            } else {
+                _ack_buf.erase(_ack_buf.begin(), _ack_buf.begin() + (acked - _send_base));
+            }
+            _send_base = acked;
+        }
+        lck.unlock();
     }
     if (is_syn(flags)) {
         ack_number = tcp->seq;
@@ -60,6 +86,14 @@ void TCPConnection::recv(uint8_t const *data, size_t len) {
         inc_ack_number(flags, payload_size);
         state = State::FIN_WAIT_1;
         send(nullptr, 0, get_flags({ACK_MASK, FIN_MASK}));
+        {
+            std::cout << "fin" << std::endl;
+            std::unique_lock lck(_read_m);
+            _buffer_ready = true;
+            lck.unlock();
+            _cv.notify_one();
+            std::cout << "notified" << std::endl;
+        }
         if (_close_cb) {
             _close_cb();
         }
@@ -67,11 +101,11 @@ void TCPConnection::recv(uint8_t const *data, size_t len) {
         uint8_t const *payload = data + header_len;
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));
-        std::unique_lock<std::mutex> lck(_m);
-        _buffer.insert(_buffer.end(), payload, payload + payload_size);
+        std::unique_lock<std::mutex> lck(_read_m);
+        _recv_buf.insert(_recv_buf.end(), payload, payload + payload_size);
         _buffer_ready = true;
         lck.unlock();
-        cv.notify_one();
+        _cv.notify_one();
     }
 }
 
@@ -100,26 +134,49 @@ uint16_t TCPConnection::get_flags(std::initializer_list<uint16_t> masks, uint16_
     return base;
 }
 
-void TCPConnection::init(uint32_t dst_ip, uint16_t dst_port) {
+void TCPConnection::connect(uint32_t dst_ip, uint16_t dst_port) {
+    std::random_device r;
+    std::default_random_engine e1(r());
+    std::uniform_int_distribution<uint32_t> uniform_dist;
+
+    seq_number = uniform_dist(e1);
     _dst_ip = dst_ip;
     _dst_port = htons(dst_port);
     send(nullptr, 0, get_flags({SYN_MASK}));
     state = State::SYN_SEND;
+
+    // start send process
+    std::thread([&] {
+        while (true) {
+            this->send();
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }).detach();
 }
 
 ssize_t TCPConnection::read(uint8_t *buf, size_t size) {
-    std::unique_lock lck(_m);
-    cv.wait(lck, [&] { return _buffer_ready; });
-    if (_buffer.empty()) {
+    std::unique_lock lck(_read_m);
+    std::cout << "before wait" << std::endl;
+    _cv.wait(lck, [&] { return _buffer_ready; });
+    std::cout << "after wait" << std::endl;
+    if (_recv_buf.empty()) {
         return 0;
     }
-    if (size > _buffer.size()) {
-        std::copy(_buffer.begin(), _buffer.end(), buf);
-        _buffer.erase(_buffer.begin(), _buffer.end());
-        return _buffer.size();
+    if (size > _recv_buf.size()) {
+        size_t read_size = _recv_buf.size();
+        std::copy(_recv_buf.begin(), _recv_buf.end(), buf);
+        _recv_buf.clear();
+        _buffer_ready = false;
+        return read_size;
     } else {
-        std::copy(_buffer.begin(), _buffer.begin() + size, buf);
-        _buffer.erase(_buffer.begin(), _buffer.begin() + size);
+        std::copy(_recv_buf.begin(), _recv_buf.begin() + size, buf);
+        _recv_buf.erase(_recv_buf.begin(), _recv_buf.begin() + size);
         return size;
     }
+}
+
+ssize_t TCPConnection::write(uint8_t const *buf, size_t size) {
+    std::unique_lock lck(_write_m);
+    _send_buf.insert(_send_buf.end(), buf, buf + size);
+    return size;
 }

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <random>
+#include <atomic>
 #include <functional>
 #include <utility>
 #include <condition_variable>
@@ -36,6 +37,8 @@ const uint8_t IP_TCP = 0x06;
 
 class TCPConnection {
 private:
+    const size_t MSS = 1000;
+
     enum class State {
         CLOSED,
         SYN_SEND,
@@ -44,27 +47,35 @@ private:
         FIN_WAIT_2,
         TIME_WAIT
     };
+    IPController const &ip;
 
     std::function<void(int)> _established_cb;
     std::function<void()> _close_cb;
-    std::function<void(int)> _send_cb;
 
-    std::queue<struct tcp_t *> q;
-    uint32_t seq_number;
-    uint32_t ack_number;
-    uint32_t send_base;
-    State state;
+    uint32_t seq_number{0};
+    uint32_t ack_number{0};
+
+    State state{State::CLOSED};
     uint16_t _src_port;
-    uint16_t _dst_port;
+    uint16_t _dst_port{};
     uint32_t _src_ip;
-    uint32_t _dst_ip;
-    IPController const &ip;
-    std::mutex _m;
-    std::deque<uint8_t> _buffer;
-    std::condition_variable cv;
-    bool _buffer_ready = false;
+    uint32_t _dst_ip{};
+
+    // to send
+    std::mutex _write_m;
+    uint32_t _send_base{0};
+    std::deque<uint8_t> _send_buf;
+    std::deque<uint8_t> _ack_buf;
+
+    // to receive
+    std::mutex _read_m;
+    std::deque<uint8_t> _recv_buf;
+    std::condition_variable _cv;
+    bool _buffer_ready{false};
 
     ssize_t send(const uint8_t *data, size_t len, uint16_t flags);
+
+    void send();
 
     void inc_seq_number(uint16_t flags, size_t payload_size);
 
@@ -89,22 +100,19 @@ private:
     }
 
 public:
-    TCPConnection(uint16_t port, uint32_t src_ip, IPController const &ip)
-            : q(), state(State::CLOSED), _src_port(htons(port)), _src_ip(src_ip), _dst_port(0), _dst_ip(0),
-              ack_number(0), send_base(0), ip(ip), _buffer(), cv() {
-        std::random_device r;
-        std::default_random_engine e1(r());
-        std::uniform_int_distribution<uint32_t> uniform_dist;
-        seq_number = uniform_dist(e1);
-    }
+    TCPConnection(uint16_t src_port, uint32_t src_ip, const IPController &ip) : ip(ip), _src_port(htons(src_port)),
+                                                                                _src_ip(src_ip) {}
 
-    void recv(uint8_t const *data, size_t len);
+    void recv(uint8_t const *data, size_t len) noexcept;
 
     void send(const uint8_t *data, size_t len);
 
-    void init(uint32_t dst_ip, uint16_t dst_port);
+    // POSIX APIs
+    void connect(uint32_t dst_ip, uint16_t dst_port);
 
     ssize_t read(uint8_t *buf, size_t size);
+
+    ssize_t write(uint8_t const *buf, size_t size);
 
     void onEstablished(std::function<void(int)> cb) {
         _established_cb = std::move(cb);
@@ -112,10 +120,6 @@ public:
 
     void onClose(std::function<void()> cb) {
         _close_cb = std::move(cb);
-    }
-
-    void onSend(std::function<void(int)> cb) {
-        _send_cb = std::move(cb);
     }
 };
 

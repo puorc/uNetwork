@@ -78,8 +78,9 @@ void MessageListener::process(int fd) {
             case IPC_WRITE: {
                 auto *data = reinterpret_cast<ipc_write *>(msg->data);
                 tcp.send(data->sockfd, data->buf, data->len, [&](int size) {
-                    reply(fd, IPC_WRITE, msg->pid, data->len);
+
                 });
+                reply(fd, IPC_WRITE, msg->pid, data->len);
                 break;
             }
             case IPC_CLOSE: {

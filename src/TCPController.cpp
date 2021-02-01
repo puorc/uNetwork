@@ -17,7 +17,6 @@ void TCPController::send(int fd, const uint8_t *data, size_t size, std::function
 //    std::shared_lock lock(mutex_);
     if (connections.find(fd) != connections.end()) {
         auto conn = connections[fd];
-        conn->onSend(std::move(callback));
         conn->send(data, size);
     }
 }
@@ -37,7 +36,7 @@ void TCPController::init(int fd, uint32_t dst_ip, uint16_t dst_port, std::functi
     if (connections.find(fd) != connections.end()) {
         auto conn = connections[fd];
         conn->onEstablished(std::move(init_cb));
-        conn->init(dst_ip, dst_port);
+        conn->connect(dst_ip, dst_port);
     }
 }
 
