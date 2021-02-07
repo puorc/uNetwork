@@ -12,15 +12,14 @@
 class TCPController {
 private:
     std::shared_mutex mutex_;
-    int _port{49156};
+    int _port{37960};
     int _fd{1000};
     IPController const &ip;
     NetworkDevice const &device;
     std::unordered_map<int, std::shared_ptr<TCPConnection>> connections;
     std::unordered_map<uint16_t, int> port_fd_map;
 public:
-    explicit TCPController(const IPController &ip, const NetworkDevice &device) : ip(ip), device(device),
-                                                                                  connections(), port_fd_map() {};
+    explicit TCPController(const IPController &ip, const NetworkDevice &device) : ip(ip), device(device) {};
 
     int alloc();
 
@@ -32,7 +31,11 @@ public:
 
     ssize_t read(int fd, uint8_t *buf, size_t size);
 
+    int poll(struct pollfd fds[], nfds_t nfds, int timeout);
+
     int close(int fd);
+
+    int getname(int sockfd, struct sockaddr *addr, socklen_t *addrlen, bool is_peer);
 };
 
 

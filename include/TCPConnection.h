@@ -11,6 +11,7 @@
 #include <utility>
 #include <condition_variable>
 #include <mutex>
+#include <poll.h>
 #include "utils.h"
 #include "IPController.h"
 
@@ -56,11 +57,9 @@ private:
     uint32_t seq_number{0};
     uint32_t ack_number{0};
 
+    short poll_flags;
+
     State state{State::CLOSED};
-    uint16_t _src_port;
-    uint16_t _dst_port{};
-    uint32_t _src_ip;
-    uint32_t _dst_ip{};
 
     // to send
     std::mutex _write_m;
@@ -101,12 +100,19 @@ private:
     }
 
 public:
+    uint16_t _src_port;
+    uint16_t _dst_port{};
+    uint32_t _src_ip;
+    uint32_t _dst_ip{};
+
     TCPConnection(uint16_t src_port, uint32_t src_ip, const IPController &ip) : ip(ip), _src_port(htons(src_port)),
                                                                                 _src_ip(src_ip) {}
 
     void recv(uint8_t const *data, size_t len) noexcept;
 
     void send(const uint8_t *data, size_t len);
+
+    short hasRead() const { return poll_flags; }
 
     // POSIX APIs
     void connect(uint32_t dst_ip, uint16_t dst_port);

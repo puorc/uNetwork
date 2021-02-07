@@ -79,6 +79,7 @@ void TCPConnection::recv(uint8_t const *data, size_t len) noexcept {
         inc_ack_number(flags, payload_size);
         send(nullptr, 0, get_flags({ACK_MASK}));
         state = State::ESTABLISHED;
+        poll_flags |= (POLLOUT | POLLWRNORM | POLLWRBAND);
         if (_established_cb) {
             _established_cb(0);
         }
@@ -90,12 +91,14 @@ void TCPConnection::recv(uint8_t const *data, size_t len) noexcept {
             if (payload_size > 0) {
                 uint8_t const *payload = data + header_len;
                 _recv_buf.insert(_recv_buf.end(), payload, payload + payload_size);
+                poll_flags |= (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND);
             }
             _buffer_ready = true;
             lck.unlock();
-            _cv.notify_one();
+//            _cv.notify_one();
         }
         if (is_fin(flags)) {
+            poll_flags |= (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND);
             state = State::CLOSE_WAIT;
         }
 
@@ -143,49 +146,101 @@ void TCPConnection::connect(uint32_t dst_ip, uint16_t dst_port) {
 
     seq_number = uniform_dist(e1);
     _dst_ip = dst_ip;
-    _dst_port = htons(dst_port);
+    _dst_port = dst_port;
     send(nullptr, 0, get_flags({SYN_MASK}));
     state = State::SYN_SEND;
 
-    // start send process
-    std::thread([&] {
-        while (true) {
-            this->send();
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//    // start send process
+//    std::thread([&] {
+//        while (true) {
+//            this->send();
+//            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+//        }
+//    }).detach();
+}
+
+void hexDump(char *desc, void *addr, int len) {
+    int i;
+    unsigned char buff[17];
+    unsigned char *pc = (unsigned char *) addr;
+
+    // Output description if given.
+    if (desc != NULL)
+        printf("%s:\n", desc);
+
+    // Process every byte in the data.
+    for (i = 0; i < len; i++) {
+        // Multiple of 16 means new line (with line offset).
+
+        if ((i % 16) == 0) {
+            // Just don't print ASCII for the zeroth line.
+            if (i != 0)
+                printf("  %s\n", buff);
+
+            // Output the offset.
+            printf("  %04x ", i);
         }
-    }).detach();
+
+        // Now the hex code for the specific character.
+        printf(" %02x", pc[i]);
+
+        // And store a printable ASCII character for later.
+        if ((pc[i] < 0x20) || (pc[i] > 0x7e)) {
+            buff[i % 16] = '.';
+        } else {
+            buff[i % 16] = pc[i];
+        }
+
+        buff[(i % 16) + 1] = '\0';
+    }
+
+    // Pad out last line if not exactly 16 characters.
+    while ((i % 16) != 0) {
+        printf("   ");
+        i++;
+    }
+
+    // And print the final ASCII bit.
+    printf("  %s\n", buff);
 }
 
 ssize_t TCPConnection::read(uint8_t *buf, size_t size) {
     std::unique_lock lck(_read_m);
-    std::cout << "before wait" << std::endl;
-    _cv.wait(lck, [&] { return _buffer_ready; });
-    std::cout << "after wait" << std::endl;
+//    std::cout << "before wait" << std::endl;
+//    _cv.wait(lck, [&] { return _buffer_ready; });
+//    std::cout << "after wait" << std::endl;
     if (_recv_buf.empty()) {
         return 0;
     }
+    std::cout << "try to read" << size << "from server" << std::endl;
+    std::cout << "Available size is " << _recv_buf.size() << std::endl;
     if (size > _recv_buf.size()) {
         size_t read_size = _recv_buf.size();
         std::copy(_recv_buf.begin(), _recv_buf.end(), buf);
+        hexDump(nullptr, buf, read_size);
         _recv_buf.clear();
         if (state == State::ESTABLISHED) {
             _buffer_ready = false;
+            poll_flags &= ~POLLIN;
         }
         return read_size;
     } else {
         std::copy(_recv_buf.begin(), _recv_buf.begin() + size, buf);
         _recv_buf.erase(_recv_buf.begin(), _recv_buf.begin() + size);
+        hexDump(nullptr, buf, size);
         return size;
     }
 }
 
 ssize_t TCPConnection::write(uint8_t const *buf, size_t size) {
-    std::unique_lock lck(_write_m);
-    _send_buf.insert(_send_buf.end(), buf, buf + size);
+//    std::unique_lock lck(_write_m);
+//    _send_buf.insert(_send_buf.end(), buf, buf + size);
+//    printf("write %s\n", buf);
+    send(buf, size);
     return size;
 }
 
 void TCPConnection::close() {
-    send(nullptr, 0, get_flags({FIN_MASK, ACK_MASK}));
+//    send(nullptr, 0, get_flags({FIN_MASK, ACK_MASK}));
     state = State::CLOSED;
 }

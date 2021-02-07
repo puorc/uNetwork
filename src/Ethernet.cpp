@@ -28,7 +28,7 @@ ssize_t Ethernet::send(const HwAddr &dmac, Ethernet::protocol type, uint8_t *dat
 
 Result Ethernet::recv() const {
     ssize_t n;
-    if ((n = device.tun_read(_buf, device.mtu)) <= 0) {
+    if ((n = device.tun_read(_buf, 5000)) <= 0) {
         return Result{.data=nullptr, .protocol=0, .size=0};
     }
     auto *eth = reinterpret_cast<ethernet_t *>(_buf);

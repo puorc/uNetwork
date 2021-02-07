@@ -116,6 +116,15 @@ public:
 
     void start();
 
+    void getname(int fd, struct ipc_msg *msg);
+
+    void net_read(struct ipc_msg *msg, int fd);
+
+    void net_write(struct ipc_msg *msg, int fd);
+
+    void net_connect(struct ipc_msg *msg, int fd);
+
+    void net_poll(struct ipc_msg *msg, int fd);
 };
 
 

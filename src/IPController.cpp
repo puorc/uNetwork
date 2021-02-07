@@ -57,7 +57,7 @@ ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, siz
 
     ptr += sizeof(struct ipv4_t);
     memcpy(ptr, data, len);
-    ssize_t n = eth.send({0x9a, 0xde, 0x26, 0x83, 0xdb, 0x20}, Ethernet::protocol::IPv4, buf, buf_size);
+    ssize_t n = eth.send({0xfe, 0xcb, 0x50, 0x02, 0xb0, 0x9b}, Ethernet::protocol::IPv4, buf, buf_size);
     delete[] buf;
     return n;
 }
