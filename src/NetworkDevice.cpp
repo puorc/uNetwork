@@ -1,7 +1,7 @@
 #include "NetworkDevice.h"
 
 NetworkDevice::NetworkDevice() : mtu(1500), ip_addr(ip_parse("10.0.0.4")) {
-    _tun_id = tun_init();
+    tun_fd_ = tun_init();
     auto *arr = new uint8_t[6];
     sscanf("00:0c:29:6d:50:25", "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &arr[0],
            &arr[1],
@@ -32,14 +32,14 @@ int NetworkDevice::tun_init() {
 }
 
 ssize_t NetworkDevice::tun_read(uint8_t *buf, std::size_t len) const {
-    return read(_tun_id, buf, len);
+    return read(tun_fd_, buf, len);
 }
 
 ssize_t NetworkDevice::tun_write(uint8_t *buf, std::size_t len) const {
-    return write(_tun_id, buf, len);
+    return write(tun_fd_, buf, len);
 }
 
 NetworkDevice::~NetworkDevice() {
     delete[] mac_addr;
-    close(_tun_id);
+    close(tun_fd_);
 }

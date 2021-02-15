@@ -17,7 +17,7 @@
 
 class NetworkDevice {
 private:
-    int _tun_id;
+    int tun_fd_;
 
     int tun_init();
 
