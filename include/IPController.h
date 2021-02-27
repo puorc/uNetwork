@@ -6,7 +6,13 @@
 #include "ARPController.h"
 #include "Ethernet.h"
 #include "RouteTable.h"
-#include "utils.h"
+
+struct IpResult {
+    uint8_t const *data;
+    uint16_t protocol;
+    uint32_t from_ip;
+    size_t size;
+};
 
 class IPController {
 private:
@@ -42,7 +48,7 @@ public:
 
     ssize_t send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, size_t len) const;
 
-    Result recv() const;
+    IpResult recv() const;
 };
 
 

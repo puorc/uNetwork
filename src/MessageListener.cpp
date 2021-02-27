@@ -42,7 +42,7 @@ void MessageListener::process(int fd) {
         auto *msg = reinterpret_cast<ipc_msg *>(buf);
         switch (msg->type) {
             case IPC_SOCKET:
-                reply(fd, IPC_SOCKET, msg->pid, tcp.alloc());
+                reply(fd, IPC_SOCKET, msg->pid, tcp.socket());
                 break;
             case IPC_CONNECT: {
                 net_connect(msg, fd);
@@ -132,8 +132,8 @@ void MessageListener::getname(int fd, struct ipc_msg *msg) {
     response->pid = pid;
 
     struct ipc_sockname *nameres = (struct ipc_sockname *) ((struct ipc_err *) response->data)->data;
-    rc = tcp.getname(name->socket, (struct sockaddr *) nameres->sa_data, &nameres->address_len,
-                     msg->type == IPC_GETPEERNAME);
+    rc = tcp.get_name(name->socket, (struct sockaddr *) nameres->sa_data, &nameres->address_len,
+                      msg->type == IPC_GETPEERNAME);
 
     struct ipc_err err;
     if (rc < 0) {
@@ -184,7 +184,7 @@ void MessageListener::net_write(struct ipc_msg *msg, int fd) {
 
 void MessageListener::net_connect(struct ipc_msg *msg, int fd) {
     auto *data = reinterpret_cast<struct ipc_connect *>(msg->data);
-    tcp.init(data->sockfd, data->addr.sin_addr.s_addr, data->addr.sin_port, [&](int rc) {
+    tcp.connect(data->sockfd, data->addr.sin_addr.s_addr, ntohs(data->addr.sin_port), [&](int rc) {
         reply(fd, IPC_CONNECT, msg->pid, rc);
     });
 }

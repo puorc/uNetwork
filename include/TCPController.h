@@ -12,20 +12,27 @@
 class TCPController {
 private:
     std::shared_mutex mutex_;
-    int _port{37960};
-    int _fd{1000};
-    IPController const &ip;
+    int next_port_{38360};
+    int next_fd_{1500};
+
+    IPController const &ip_ctrl;
     NetworkDevice const &device;
+
     std::unordered_map<int, std::shared_ptr<TCPConnection>> connections;
     std::unordered_map<uint16_t, int> port_fd_map;
-public:
-    explicit TCPController(const IPController &ip, const NetworkDevice &device) : ip(ip), device(device) {};
 
-    int alloc();
+    TCPConnection dummy_connection;
+public:
+    explicit TCPController(const IPController &ip, const NetworkDevice &device) : ip_ctrl(ip), device(device),
+                                                                                  dummy_connection(next_port_ - 1,
+                                                                                                   device.ip_addr,
+                                                                                                   ip) {};
+
+    int socket();
 
     void recv();
 
-    void init(int fd, uint32_t dst_ip, uint16_t dst_port, std::function<void(int)> init_cb);
+    void connect(int fd, uint32_t dst_ip, uint16_t dst_port, std::function<void(int)> init_cb);
 
     ssize_t write(int fd, uint8_t const *data, size_t size);
 
@@ -35,7 +42,7 @@ public:
 
     int close(int fd);
 
-    int getname(int sockfd, struct sockaddr *addr, socklen_t *addrlen, bool is_peer);
+    int get_name(int sockfd, struct sockaddr *addr, socklen_t *addrlen, bool is_peer);
 };
 
 

@@ -1,19 +1,19 @@
 #include "IPController.h"
 
-Result IPController::recv() const {
+IpResult IPController::recv() const {
     auto[data, protocol, size] = eth.recv();
     if (protocol == static_cast<uint16_t>(Ethernet::protocol::ARP)) {
         arp.recv(data, size);
-        return Result{.data=nullptr, .protocol=0, .size=0};
+        return IpResult{.data=nullptr, .protocol=0, .from_ip=0, .size=0};
     } else if (protocol == static_cast<uint16_t>(Ethernet::protocol::IPv4)) {
         auto *ipv4 = reinterpret_cast<ipv4_t const *>(data);
         size_t header_length = (ipv4->ver_hl & 0x0f) * 4;
-        return Result{.data=data + header_length, .protocol=ipv4->protocol, .size=
+        return IpResult{.data=data + header_length, .protocol=ipv4->protocol, .from_ip=ipv4->src_ip, .size=
         ntohs(ipv4->datagram_len) - header_length};
     } else {
         std::cout << "Invalid IP packet. not supported" << std::endl;
         std::cout.flush();
-        return Result{.data = nullptr, .protocol = 0, .size = 0};
+        return IpResult{.data = nullptr, .protocol = 0, .from_ip=0, .size = 0};
     }
 }
 
@@ -57,7 +57,7 @@ ssize_t IPController::send(uint32_t dst_ip, uint8_t protocol, uint8_t *data, siz
 
     ptr += sizeof(struct ipv4_t);
     memcpy(ptr, data, len);
-    ssize_t n = eth.send({0xfe, 0xcb, 0x50, 0x02, 0xb0, 0x9b}, Ethernet::protocol::IPv4, buf, buf_size);
+    ssize_t n = eth.send({0x76, 0xb1, 0xfd, 0x1a, 0x31, 0x74}, Ethernet::protocol::IPv4, buf, buf_size);
     delete[] buf;
     return n;
 }
