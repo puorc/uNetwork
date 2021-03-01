@@ -20,7 +20,8 @@ ssize_t TCPConnection::send(const uint8_t *data, size_t len, uint16_t flags, uin
     tcp->checksum = tcp_udp_checksum(src_ip, dst_ip, IP_TCP, buf, total_len);
 
     ssize_t n = ip_ctrl_.send(dst_ip, IP_TCP, buf, total_len);
-    delete[] buf;
+    std::unique_lock lck(send_m_);
+    send_buf_.emplace_back(buf, total_len);
     return n;
 }
 
@@ -34,27 +35,6 @@ ssize_t TCPConnection::send(const uint8_t *data, size_t len, uint16_t flags) {
 
 void TCPConnection::send(const uint8_t *data, size_t len) {
     send(data, len, get_flags({PSH_MASK, ACK_MASK}));
-}
-
-void TCPConnection::send() {
-    std::unique_lock lck(write_m_);
-    size_t size = _send_buf.size();
-    if (size == 0) {
-        return;
-    }
-    auto *tosend = new uint8_t[std::max(size, MSS)];
-    if (size <= MSS) {
-        std::copy(_send_buf.begin(), _send_buf.end(), tosend);
-        send(tosend, size);
-        _ack_buf.insert(_ack_buf.end(), _send_buf.begin(), _send_buf.end());
-        _send_buf.clear();
-    } else {
-        std::copy(_send_buf.begin(), _send_buf.begin() + MSS, tosend);
-        send(tosend, MSS);
-        _ack_buf.insert(_ack_buf.end(), _send_buf.begin(), _send_buf.begin() + MSS);
-        _send_buf.erase(_send_buf.begin(), _send_buf.begin() + MSS);
-    }
-    delete[] tosend;
 }
 
 void TCPConnection::recv(uint8_t const *data, size_t len, uint32_t from_ip) noexcept {
@@ -156,19 +136,32 @@ void TCPConnection::recv(uint8_t const *data, size_t len, uint32_t from_ip) noex
         return;
     }
 
-//    if (has_ack(flags)) {
-//        std::unique_lock lck(write_m_);
-//        uint32_t acked = ntohl(tcp->ack);
-//        if (acked > send_base_) {
-//            if (acked - send_base_ >= _ack_buf.size()) {
-//                _ack_buf.clear();
-//            } else {
-//                _ack_buf.erase(_ack_buf.begin(), _ack_buf.begin() + (acked - send_base_));
-//            }
-//            send_base_ = acked;
-//        }
-//        lck.unlock();
-//    }
+    uint32_t acked = ntohl(tcp->ack);
+    while (!send_buf_.empty()) {
+        std::unique_lock lck0(_read_m);
+        auto &p = send_buf_.front();
+        lck0.unlock();
+        auto *packet = reinterpret_cast<tcp_t *>(p.first);
+        uint32_t next_seq = ntohl(nl_add_hl(packet->seq, p.second));
+        if (next_seq <= acked) {
+            if (has_fin(packet->flags)) {
+                if (state_ == State::FIN_WAIT_1) {
+                    state_ = State::FIN_WAIT_2;
+                } else if (state_ == State::LAST_ACK) {
+                    state_ = State::CLOSED;
+                    if (close_cb_) {
+                        close_cb_(0);
+                    }
+                }
+            }
+            delete[] p.first;
+            std::unique_lock lck1(_read_m);
+            send_buf_.pop_front();
+            lck1.unlock();
+        } else {
+            break;
+        }
+    }
 
     if (payload_size > 0) {
         std::unique_lock<std::mutex> lck(_read_m);
@@ -192,10 +185,15 @@ void TCPConnection::recv(uint8_t const *data, size_t len, uint32_t from_ip) noex
             case State::FIN_WAIT_1:
             case State::FIN_WAIT_2:
                 state_ = State::TIME_WAIT;
+                std::thread([&] {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1000 * 2));
+                    state_ = State::CLOSED;
+                }).detach();
                 break;
             case State::CLOSE_WAIT:
             case State::CLOSING:
             case State::LAST_ACK:
+                break;
             case State::TIME_WAIT:
                 break;
         }
@@ -225,6 +223,10 @@ uint16_t TCPConnection::get_flags(std::initializer_list<uint16_t> masks, uint16_
 }
 
 void TCPConnection::connect(uint32_t dst_ip, uint16_t dst_port) {
+    if (state_ != State::CLOSED) {
+        established_cb_(-EISCONN);
+        return;
+    }
     std::random_device r;
     std::default_random_engine e1(r());
     std::uniform_int_distribution<uint32_t> uniform_dist;
@@ -236,12 +238,6 @@ void TCPConnection::connect(uint32_t dst_ip, uint16_t dst_port) {
     state_ = State::SYN_SENT;
 
 //    // start send process
-//    std::thread([&] {
-//        while (true) {
-//            this->send();
-//            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-//        }
-//    }).detach();
 }
 
 ssize_t TCPConnection::read(uint8_t *buf, size_t size) {
@@ -281,6 +277,11 @@ ssize_t TCPConnection::write(uint8_t const *buf, size_t size) {
 }
 
 void TCPConnection::close() {
-//    send(nullptr, 0, get_flags({FIN_MASK, ACK_MASK}));
-//    state_ = State::CLOSED;
+    if (state_ == State::ESTABLISHED) {
+        send(nullptr, 0, get_flags({FIN_MASK, ACK_MASK}));
+        state_ = State::FIN_WAIT_1;
+    } else if (state_ == State::CLOSE_WAIT) {
+        send(nullptr, 0, get_flags({FIN_MASK, ACK_MASK}));
+        state_ = State::LAST_ACK;
+    }
 }

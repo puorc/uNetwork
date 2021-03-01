@@ -12,8 +12,8 @@
 class TCPController {
 private:
     std::shared_mutex mutex_;
-    int next_port_{38360};
-    int next_fd_{1500};
+    int next_port_{33360};
+    int next_fd_{1600};
 
     IPController const &ip_ctrl;
     NetworkDevice const &device;

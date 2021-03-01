@@ -45,6 +45,8 @@ void TCPController::connect(int fd, uint32_t dst_ip, uint16_t dst_port, std::fun
         lock.unlock();
         conn->on_established(std::move(init_cb));
         conn->connect(dst_ip, dst_port);
+    } else {
+        init_cb(-EBADF);
     }
 }
 

@@ -63,16 +63,16 @@ private:
     uint32_t dst_ip_{};
     State state_{State::CLOSED};
 
+    std::deque<std::pair<uint8_t *, size_t>> send_buf_;
+    std::mutex send_m_;
     short poll_flags_;
 
     std::function<void(int)> established_cb_;
-    std::function<void()> close_cb_;
+    std::function<void(int)> close_cb_;
 
     // to send
-    std::mutex write_m_;
+
     uint32_t send_base_{0};
-    std::deque<uint8_t> _send_buf;
-    std::deque<uint8_t> _ack_buf;
 
     // to receive
     std::mutex _read_m;
@@ -139,6 +139,10 @@ public:
         return state_ == State::ESTABLISHED;
     }
 
+    bool is_closed() const {
+        return state_ == State::CLOSED;
+    }
+
     void recv(uint8_t const *data, size_t len, uint32_t from_ip) noexcept;
 
     void send(const uint8_t *data, size_t len);
@@ -158,7 +162,7 @@ public:
         established_cb_ = std::move(cb);
     }
 
-    void on_close(std::function<void()> cb) {
+    void on_close(std::function<void(int)> cb) {
         close_cb_ = std::move(cb);
     }
 };
